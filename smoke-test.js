@@ -1,4 +1,15 @@
 require("dotenv").config();
+
+// Node 18+ já traz fetch global. Se não tiver, falha de forma explícita
+if (typeof fetch !== "function") {
+  // eslint-disable-next-line no-console
+  console.error(
+    "[smoke] Este script exige Node 18+ (fetch global). Atualize o Node.",
+  );
+  process.exit(1);
+}
+
+// Configuração / defaults
 const httpPort = Number(process.env.SFU_HTTP_PORT || 3000);
 const wsPort = Number(process.env.SFU_WS_PORT || 4443);
 const apiSecret = process.env.SFU_API_SECRET || "";
@@ -6,17 +17,53 @@ const apiSecret = process.env.SFU_API_SECRET || "";
 const baseHttp = `http://127.0.0.1:${httpPort}`;
 const baseWs = `ws://127.0.0.1:${wsPort}`;
 
+const COLORS = {
+  reset: "\x1b[0m",
+  green: "\x1b[32m",
+  red: "\x1b[31m",
+  yellow: "\x1b[33m",
+  cyan: "\x1b[36m",
+};
+
+function c(color, msg) {
+  return `${COLORS[color]}${msg}${COLORS.reset}`;
+}
+
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
-async function httpGet(path, headers = {}) {
-  const res = await fetch(`${baseHttp}${path}`, { headers });
+function parseCliArgs(argv) {
+  const args = {
+    verbose: false,
+    timeoutMs: 8000,
+    skipWs: false,
+  };
+
+  for (const raw of argv.slice(2)) {
+    if (raw === "--verbose" || raw === "-v") args.verbose = true;
+    else if (raw === "--skip-ws") args.skipWs = true;
+    else if (raw.startsWith("--timeout=")) {
+      const v = Number(raw.split("=", 2)[1]);
+      if (!Number.isNaN(v) && v > 0) args.timeoutMs = v;
+    }
+  }
+
+  return args;
+}
+
+async function httpGet(path, headers = {}, { verbose } = {}) {
+  const url = `${baseHttp}${path}`;
+  if (verbose) console.log(c("cyan", `[http] GET ${url}`));
+
+  const res = await fetch(url, { headers });
   const text = await res.text();
   let json = null;
   try {
     json = JSON.parse(text);
-  } catch {}
+  } catch {
+    // corpo não-JSON é aceitável, mantemos text
+  }
   return {
     res,
     text,
@@ -24,8 +71,14 @@ async function httpGet(path, headers = {}) {
   };
 }
 
-async function httpPost(path, body, headers = {}) {
-  const res = await fetch(`${baseHttp}${path} `, {
+async function httpPost(path, body, headers = {}, { verbose } = {}) {
+  const url = `${baseHttp}${path}`;
+  if (verbose)
+    console.log(
+      c("cyan", `[http] POST ${url} body=${JSON.stringify(body ?? {})}`),
+    );
+
+  const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body ?? {}),
@@ -34,18 +87,26 @@ async function httpPost(path, body, headers = {}) {
   let json = null;
   try {
     json = JSON.parse(text);
-  } catch {}
+  } catch {
+    // idem GET
+  }
   return { res, text, json };
 }
 
-function wsConnect(url) {
+function wsConnect(url, { verbose } = {}) {
   const WS = globalThis.WebSocket || require("ws");
+  if (verbose) console.log(c("cyan", `[ws] conectando em ${url}`));
   return new WS(url);
 }
 
-async function wsRequest(ws, payload, timeoutMs = 5000) {
+async function wsRequest(ws, payload, timeoutMs, { verbose } = {}) {
   const id = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const msg = { id, ...payload };
+
+  if (verbose)
+    console.log(
+      c("cyan", `[ws] -> ${JSON.stringify({ ...msg, token: !!msg.token })}`),
+    );
 
   return await new Promise((resolve, reject) => {
     const t = setTimeout(
@@ -69,6 +130,8 @@ async function wsRequest(ws, payload, timeoutMs = 5000) {
       if (!data || data.id !== id) return;
 
       cleanup();
+      if (verbose)
+        console.log(c("cyan", `[ws] <- ${JSON.stringify(data)}`));
       resolve(data);
     }
 
@@ -97,24 +160,27 @@ async function wsRequest(ws, payload, timeoutMs = 5000) {
   });
 }
 
-async function main() {
-  console.log(`[smoke] HTTP: ${baseHttp}`);
-  console.log(`[smoke] WS:   ${baseWs}`);
+async function runHttpChecks(ctx) {
+  const { verbose } = ctx;
 
-  const health = await httpGet("/health");
+  const health = await httpGet("/health", {}, { verbose });
   assert(health.res.status === 200, `GET /health status ${health.res.status}`);
   assert(
     health.json && health.json.ok === true,
     `GET /health payload inválido: ${health.text}`,
   );
-  console.log("[ok] /health");
+  console.log(c("green", "[ok] /health"));
 
-  const metricsNoAuth = await httpGet("/metrics");
+  const metricsNoAuth = await httpGet("/metrics", {}, { verbose });
   assert(
     metricsNoAuth.res.status === 401,
     `GET /metrics sem auth deveria ser 401, veio ${metricsNoAuth.res.status}`,
   );
-  console.log("[ok] /metrics sem auth -> 401");
+  console.log(c("green", "[ok] /metrics sem auth -> 401"));
+}
+
+async function runProtectedEndpoints(ctx) {
+  const { verbose } = ctx;
 
   assert(
     apiSecret,
@@ -125,6 +191,7 @@ async function main() {
     "/rooms",
     { roomId: `test_${Date.now()}` },
     { authorization: `Bearer ${apiSecret}` },
+    { verbose },
   );
   assert(
     createRoom.res.status === 200,
@@ -135,9 +202,14 @@ async function main() {
     `POST /rooms payload inválido: ${createRoom.text}`,
   );
   const roomId = createRoom.json.room_id;
-  console.log(`[ok] /rooms criou room_id=${roomId}`);
+  console.log(c("green", `[ok] /rooms criou room_id=${roomId}`));
 
-  const demo = await httpPost("/demo/token", { roomId, userId: "smoke_user" });
+  const demo = await httpPost(
+    "/demo/token",
+    { roomId, userId: "smoke_user" },
+    {},
+    { verbose },
+  );
   assert(
     demo.res.status === 200,
     `POST /demo/token status ${demo.res.status}: ${demo.text}`,
@@ -146,13 +218,21 @@ async function main() {
     demo.json && demo.json.token,
     `POST /demo/token payload inválido: ${demo.text}`,
   );
-  console.log("[ok] /demo/token gerou token");
+  console.log(c("green", "[ok] /demo/token gerou token"));
 
-  const wsUrl = demo.json.wsUrl || baseWs;
-  const ws = wsConnect(wsUrl);
+  return { roomId, demoToken: demo.json.token, wsUrl: demo.json.wsUrl };
+}
+
+async function runWsFlow(ctx, { wsUrl, demoToken }) {
+  const { verbose, timeoutMs } = ctx;
+  const url = wsUrl || baseWs;
+  const ws = wsConnect(url, { verbose });
 
   await new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("WS open timeout")), 5000);
+    const t = setTimeout(
+      () => reject(new Error("WS open timeout")),
+      timeoutMs,
+    );
     function ok() {
       clearTimeout(t);
       resolve();
@@ -171,38 +251,88 @@ async function main() {
     }
   });
 
-  const joinResp = await wsRequest(ws, {
-    action: "join",
-    token: demo.json.token,
-  });
+  const joinResp = await wsRequest(
+    ws,
+    {
+      action: "join",
+      token: demoToken,
+    },
+    timeoutMs,
+    { verbose },
+  );
   assert(joinResp.ok === true, `WS join falhou: ${JSON.stringify(joinResp)}`);
   assert(
     joinResp.data && joinResp.data.peerId,
     `WS join sem peerId: ${JSON.stringify(joinResp)}`,
   );
-  console.log(`[ok] WS join peerId=${joinResp.data.peerId}`);
+  console.log(
+    c("green", `[ok] WS join peerId=${joinResp.data.peerId}`),
+  );
 
-  const capsResp = await wsRequest(ws, { action: "getRouterRtpCapabilities" });
+  const capsResp = await wsRequest(
+    ws,
+    { action: "getRouterRtpCapabilities" },
+    timeoutMs,
+    { verbose },
+  );
   assert(
     capsResp.ok === true,
     `getRouterRtpCapabilities falhou: ${JSON.stringify(capsResp)}`,
   );
-  console.log("[ok] WS getRouterRtpCapabilities");
+  console.log(c("green", "[ok] WS getRouterRtpCapabilities"));
 
-  const leaveResp = await wsRequest(ws, { action: "leave" });
+  const leaveResp = await wsRequest(
+    ws,
+    { action: "leave" },
+    timeoutMs,
+    { verbose },
+  );
   assert(
     leaveResp.ok === true,
     `WS leave falhou: ${JSON.stringify(leaveResp)}`,
   );
-  console.log("[ok] WS leave");
+  console.log(c("green", "[ok] WS leave"));
 
   try {
     ws.close?.();
-  } catch {}
-  console.log("\n[smoke] PASSOU");
+  } catch {
+    // ignore
+  }
+}
+
+async function main() {
+  const args = parseCliArgs(process.argv);
+
+  console.log(
+    c(
+      "yellow",
+      `[smoke] HTTP: ${baseHttp}  WS: ${baseWs}  timeout=${args.timeoutMs}ms`,
+    ),
+  );
+
+  await runHttpChecks(args);
+
+  const { demoToken, wsUrl } = await runProtectedEndpoints(args);
+
+  if (args.skipWs) {
+    console.log(
+      c("yellow", "[smoke] --skip-ws ativo, não executando fluxo WS"),
+    );
+  } else {
+    await runWsFlow(args, { wsUrl, demoToken });
+  }
+
+  console.log(c("green", "\n[smoke] PASSOU"));
 }
 
 main().catch((err) => {
-  console.error("\n[smoke] FALHOU:", err && err.stack ? err.stack : err);
+  console.error(
+    c(
+      "red",
+      `\n[smoke] FALHOU: ${
+        err && err.stack ? err.stack : String(err || "erro desconhecido")
+      }`,
+    ),
+  );
   process.exitCode = 1;
 });
