@@ -182,7 +182,6 @@ import { Device } from 'mediasoup-client';
         }
       });
 
-      await sendTransport.connect({});
       const videoTrack = localStream.getVideoTracks()[0];
       const audioTrack = localStream.getAudioTracks()[0];
       if (videoTrack) await sendTransport.produce({ track: videoTrack, appData: { source: 'webcam' } });
@@ -206,7 +205,6 @@ import { Device } from 'mediasoup-client';
         }
       });
 
-      await recvTransport.connect({});
       setStatus('');
     } catch (e) {
       console.error(e);
