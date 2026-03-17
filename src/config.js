@@ -33,6 +33,7 @@ const config = {
 
   ws: {
     port: envInt('SFU_WS_PORT', 4443),
+    url: envStr('SFU_WS_URL', ''),
     heartbeatIntervalMs: envInt('SFU_WS_HEARTBEAT_INTERVAL_MS', 10_000),
     heartbeatTimeoutMs: envInt('SFU_WS_HEARTBEAT_TIMEOUT_MS', 30_000)
   },

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SFU — Entrar na sala</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --surface: #161a22;
+      --border: #2a2f3b;
+      --text: #e6e9ef;
+      --text-muted: #8b909a;
+      --accent: #6ee7b7;
+      --accent-dim: #34d399;
+      --danger: #f87171;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0 0 0.25rem 0;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.75rem;
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+    input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font: inherit;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.95rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+    input::placeholder { color: var(--text-muted); opacity: 0.7; }
+    input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(110, 231, 183, 0.15);
+    }
+    .row {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.25rem;
+    }
+    button {
+      flex: 1;
+      padding: 0.85rem 1.25rem;
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    button:active { transform: scale(0.98); }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+    }
+    .btn-primary:hover {
+      background: var(--accent-dim);
+      box-shadow: 0 4px 20px rgba(52, 211, 153, 0.3);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { color: var(--text); border-color: var(--text-muted); }
+    .error {
+      font-size: 0.85rem;
+      color: var(--danger);
+      margin-top: 0.5rem;
+      display: none;
+    }
+    .error.visible { display: block; }
+    .footer {
+      margin-top: 2rem;
+      text-align: center;
+    }
+    .footer a {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      text-decoration: none;
+    }
+    .footer a:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>SFU (mediasoup)</h1>
+    <p class="subtitle">Serviço de mídia em execução. Entre na sala geral ou em uma sala específica.</p>
+    <form id="form" action="#" method="post">
+      <label for="userId">Seu nome</label>
+      <input type="text" id="userId" name="userId" placeholder="Ex: Maria" required autocomplete="off">
+      <label for="roomId">Sala (opcional)</label>
+      <input type="text" id="roomId" name="roomId" placeholder="Deixe em branco para sala geral" autocomplete="off">
+      <p class="error" id="error" role="alert"></p>
+      <div class="row">
+        <button type="button" class="btn-primary" id="btnGeral">Entrar na sala geral</button>
+      </div>
+      <div class="row">
+        <button type="button" class="btn-secondary" id="btnNew">Outra sala</button>
+        <button type="submit" class="btn-primary" id="btnEnter">Entrar</button>
+      </div>
+    </form>
+    <div class="footer">
+      <a href="/health">Status do servidor</a>
+    </div>
+  </div>
+  <script>
+    const form = document.getElementById('form');
+    const roomId = document.getElementById('roomId');
+    const userId = document.getElementById('userId');
+    const errorEl = document.getElementById('error');
+    const btnNew = document.getElementById('btnNew');
+    const btnGeral = document.getElementById('btnGeral');
+
+    function showError(msg) {
+      errorEl.textContent = msg || '';
+      errorEl.classList.toggle('visible', !!msg);
+    }
+
+    async function enterRoom(rId, uId) {
+      showError('');
+      try {
+        const res = await fetch('/demo/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: rId || undefined, userId: uId })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || data.error || 'Falha ao obter token');
+        const params = new URLSearchParams({ token: data.token, wsUrl: data.wsUrl, roomId: data.roomId });
+        window.location.href = '/room.html?' + params.toString();
+      } catch (err) {
+        showError(err.message || 'Erro ao entrar. Tente novamente.');
+      }
+    }
+
+    btnGeral.addEventListener('click', (e) => {
+      e.preventDefault();
+      const uId = userId.value.trim() || 'user';
+      enterRoom('', uId);
+    });
+
+    btnNew.addEventListener('click', () => {
+      roomId.value = '';
+      roomId.placeholder = 'Digite o ID da sala (ex: reuniao-01)';
+      showError('');
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const rId = roomId.value.trim();
+      const uId = userId.value.trim() || 'user';
+      enterRoom(rId || '', uId);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sala — SFU</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --surface: #161a22;
+      --border: #2a2f3b;
+      --text: #e6e9ef;
+      --text-muted: #8b909a;
+      --accent: #6ee7b7;
+      --danger: #f87171;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 1rem;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .room-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+    .room-id strong { color: var(--text); }
+    .btn-leave {
+      padding: 0.5rem 1rem;
+      font: inherit;
+      font-weight: 600;
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn-leave:hover { background: rgba(248, 113, 113, 0.1); }
+    .videos {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      align-items: start;
+    }
+    .video-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      aspect-ratio: 16/10;
+      position: relative;
+    }
+    .video-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .video-wrap .label {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.8rem;
+      background: rgba(0,0,0,0.6);
+      color: var(--text);
+    }
+    .video-wrap.local .label { color: var(--accent); }
+    .status {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+    }
+    .status.error { color: var(--danger); }
+    .status.connecting { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="room-id">Sala: <strong id="roomId">—</strong></div>
+    <button type="button" class="btn-leave" id="btnLeave">Sair</button>
+  </header>
+  <div class="status" id="status">Conectando…</div>
+  <div class="videos" id="videos" style="display: none;"></div>
+  <script type="module" src="/room.bundle.js"></script>
+</body>
+</html>

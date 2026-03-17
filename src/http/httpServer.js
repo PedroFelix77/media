@@ -1,8 +1,12 @@
+const path = require('path');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const jwt = require('jsonwebtoken');
 const { config } = require('../config');
 const { logger } = require('../logger');
 const { createRoomWithGeneratedId, createRoom, closeRoom, listRooms } = require('../rooms/rooms');
+
+const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 
 function requireApiAuth(req, res, next) {
   const auth = req.header('authorization') || '';
@@ -22,6 +26,37 @@ async function startHttpServer() {
     limit: config.http.rateLimit.max,
     standardHeaders: 'draft-7',
     legacyHeaders: false
+  });
+
+  app.use(express.static(PUBLIC_DIR));
+
+  app.get('/', (_req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  });
+
+  // Sala geral: ID fixo para todo mundo entrar na mesma sala
+  const SALA_GERAL_ID = 'geral';
+
+  // Demo: obter token para entrar na sala (cria sala se não existir)
+  app.post('/demo/token', limiter, async (req, res) => {
+    try {
+      const roomId = req.body && String(req.body.roomId || '').trim();
+      const userId = req.body && String(req.body.userId || req.body.userName || 'user').trim() || 'user';
+      const idToUse = roomId || SALA_GERAL_ID;
+      const room = await createRoom(idToUse);
+      const callId = room.id;
+      const token = jwt.sign(
+        { roomId: room.id, userId, callId, role: 'user' },
+        config.auth.jwtSecret,
+        { algorithm: 'HS256', expiresIn: '24h' }
+      );
+      const wsUrl = config.ws.url || `ws://${req.hostname}:${config.ws.port}`;
+      logger.info({ roomId: room.id, userId }, 'DEMO_TOKEN');
+      return res.json({ token, wsUrl, roomId: room.id });
+    } catch (err) {
+      logger.warn({ err }, 'Erro ao gerar token demo');
+      return res.status(500).json({ error: 'token_failed', message: err.message });
+    }
   });
 
   app.get('/health', (_req, res) => res.json({ ok: true }));
