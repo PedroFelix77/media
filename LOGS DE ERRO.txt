@@ -1,0 +1,51 @@
+LOGS DE ERRO
+
+///FASE RED///
+PS C:\Users\pedro\Downloads\mediasoup-server\mediasoup-server> node smoke-test.js
+[smoke] HTTP: http://127.0.0.1:3000
+[smoke] WS:   ws://127.0.0.1:4443
+
+[smoke] FALHOU: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15845:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async httpGet (C:\Users\pedro\Downloads\mediasoup-server\mediasoup-server\smoke-test.js:13:15)
+    at async main (C:\Users\pedro\Downloads\mediasoup-server\mediasoup-server\smoke-test.js:103:18)
+
+PS C:\Users\pedro\Downloads\mediasoup-server\mediasoup-server> node smoke-test.js
+[smoke] HTTP: http://127.0.0.1:3000
+[smoke] WS:   ws://127.0.0.1:4443
+[ok] /health
+[ok] /metrics sem auth -> 401
+
+[smoke] FALHOU: Error: SFU_API_SECRET vazio. Configure no .env para testar endpoints protegidos.
+    at assert (C:\Users\pedro\Downloads\mediasoup-server\mediasoup-server\smoke-test.js:10:20)
+    at main (C:\Users\pedro\Downloads\mediasoup-server\mediasoup-server\smoke-test.js:119:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+PS C:\Users\pedro\Downloads\mediasoup-server\mediasoup-server> node smoke-test.js
+[smoke] HTTP: http://127.0.0.1:3000
+[smoke] WS:   ws://127.0.0.1:4443
+
+[smoke] FALHOU: Error: GET /health status 404
+    at assert (C:\Users\pedro\Downloads\mediasoup-server\mediasoup-server\smoke-test.js:10:20)
+    at main (C:\Users\pedro\Downloads\mediasoup-server\mediasoup-server\smoke-test.js:105:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+//FASE GREEN//
+
+PS C:\Users\pedro\Downloads\mediasoup-server\mediasoup-server> node smoke-test.js
+[smoke] HTTP: http://127.0.0.1:3000
+[smoke] WS:   ws://127.0.0.1:4443
+[ok] /health
+[ok] /metrics sem auth -> 401
+[ok] /rooms criou room_id=test_1773757692418
+[ok] /demo/token gerou token
+[ok] WS join peerId=smoke_user_1773757692438
+[ok] WS getRouterRtpCapabilities
+[ok] WS leave
+
+[smoke] PASSOU
+
+//FASE REFACTOR//
+
+Melhoria de mensagens de erros, correção nas rotas e arquivos do .env e organização do código.
